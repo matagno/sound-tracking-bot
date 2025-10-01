@@ -28,23 +28,28 @@ axR_dB.set_ylim(0, 200)
 
 while True:
     line = ser.readline().decode(errors="ignore").strip()
-    if line.startswith("Sample Left:"):
+
+    if line.startswith("New Data"):
+        continue
+
+    elif "Sample Left" in line :
         try:
-            val = float(line.split(":")[1].strip())
+            val = float(line.split("Sample Left:")[1].strip())
         except:
             continue
         buffer_raw_L.append(val)
         dBFS = 20 * math.log10(abs(val) + 1e-10)
         buffer_dB_L.append(dBFS + 120)
 
-    elif line.startswith("Sample Right:"):
+    elif "Sample Right" in line:
         try:
-            val = float(line.split(":")[1].strip())
+            val = float(line.split("Sample Right:")[1].strip())
         except:
             continue
         buffer_raw_R.append(val)
         dBFS = 20 * math.log10(abs(val) + 1e-10)
         buffer_dB_R.append(dBFS + 120)
+
 
     # Mise à jour graphique
     axL_raw.clear()

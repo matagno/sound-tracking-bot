@@ -4,7 +4,8 @@
 #include "BiquadFilter.hpp"
 #include <vector>
 
-extern std::vector<float> buffer;
+extern std::vector<float> bufferL;
+extern std::vector<float> bufferR;
 extern SemaphoreHandle_t bufferMutex;
 extern BiquadFilter bpFilterR;
 extern BiquadFilter bpFilterL;

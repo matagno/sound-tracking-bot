@@ -1,5 +1,6 @@
 #include "com_task.hpp"
 
+#include "esp_log.h"
 #include <cstdio>
 #include <vector>
 
@@ -7,28 +8,33 @@
 const size_t BLOCK_SIZE = 1;
 
 void com_task(void* arg) {
-    std::vector<float> localBuffer;
+    std::vector<float> localBufferR;
+    std::vector<float> localBufferL;
 
     for(;;) {
         // Copier un bloc du buffer partagé dans un buffer local
         if (xSemaphoreTake(bufferMutex, portMAX_DELAY) == pdTRUE) {
-            if (buffer.size() >= BLOCK_SIZE) {
-                localBuffer.assign(buffer.begin(), buffer.begin() + BLOCK_SIZE);
-                buffer.erase(buffer.begin(), buffer.begin() + BLOCK_SIZE);
+            if (bufferL.size() >= BLOCK_SIZE) {
+                localBufferL.assign(bufferL.begin(), bufferL.begin() + BLOCK_SIZE);
+                bufferL.erase(bufferL.begin(), bufferL.begin() + BLOCK_SIZE);
+            }
+            if (bufferR.size() >= BLOCK_SIZE) {
+                localBufferR.assign(bufferR.begin(), bufferR.begin() + BLOCK_SIZE);
+                bufferR.erase(bufferR.begin(), bufferR.begin() + BLOCK_SIZE);
             }
             xSemaphoreGive(bufferMutex);
         }
 
         // Envoyer le bloc sur UART
-        if (!localBuffer.empty()) {
-            printf("Block: \n");
-            for (size_t i = 0; i < localBuffer.size(); i++) {
-                printf("Sample Right: %f\n", localBuffer[i]);
-                //printf("Sample Left: %f\n", localBuffer[i]);
+        if (!localBufferL.empty()) {
+            ESP_LOGI("COM_TASK", "New Data");
+            for (size_t i = 0; i < localBufferL.size(); i++) {
+                ESP_LOGI("COM_TASK", "Sample Right: %f", localBufferR[i]);
+                ESP_LOGI("COM_TASK", "Sample Left: %f", localBufferL[i]);
             }
-            printf("\n");
 
-            localBuffer.clear();
+            localBufferR.clear();
+            localBufferL.clear();
         }
 
         vTaskDelay(10 / portTICK_PERIOD_MS);

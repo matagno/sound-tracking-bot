@@ -28,7 +28,7 @@ i2s_config_t i2s_config = {
     .mode = (i2s_mode_t)(I2S_MODE_MASTER | I2S_MODE_RX),
     .sample_rate = SAMPLE_RATE,
     .bits_per_sample = I2S_BITS_PER_SAMPLE_32BIT,
-    .channel_format = I2S_CHANNEL_FMT_ONLY_RIGHT,//I2S_CHANNEL_FMT_RIGHT_LEFT,
+    .channel_format = I2S_CHANNEL_FMT_RIGHT_LEFT,
     .communication_format = I2S_COMM_FORMAT_STAND_I2S,
     .intr_alloc_flags = 0,
     .dma_buf_count = 8,
@@ -51,7 +51,8 @@ BiquadFilter bpFilterR;
 ////////////////////////////////////////////
 
 ///////////// VARIABLE Buffer //////////////
-std::vector<float> buffer;
+std::vector<float> bufferL;
+std::vector<float> bufferR;
 SemaphoreHandle_t bufferMutex;
 ////////////////////////////////////////////
 
@@ -89,7 +90,7 @@ extern "C" void app_main(void) {
 
     // TASK
     xTaskCreate(i2s_task, "I2S_Task", 4096, NULL, 5, NULL);
-    xTaskCreate(com_task, "UART_Task", 4096, NULL, 1, NULL);
+    xTaskCreate(com_task, "Com_Task", 4096, NULL, 1, NULL);
 
     vTaskDelete(NULL);
 
