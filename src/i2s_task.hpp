@@ -1,13 +1,18 @@
 #pragma once
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
-#include "BiquadFilter.hpp"
+#include "biquad_filter.hpp"
+#include "sample_data.hpp"
 #include <vector>
 
-extern std::vector<float> bufferL;
-extern std::vector<float> bufferR;
-extern SemaphoreHandle_t bufferMutex;
+// Var
+extern SampleData sample_data;
 extern BiquadFilter bpFilterR;
 extern BiquadFilter bpFilterL;
+extern std::vector<float> windowL;
+extern std::vector<float> windowR;
 
+// Fonction
+void init_i2s();
 void i2s_task(void* arg);
+void register_samples(float left, float right);

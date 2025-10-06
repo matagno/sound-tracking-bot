@@ -3,17 +3,17 @@ import math
 import matplotlib.pyplot as plt
 from collections import deque
 
-# Configuration port série
+# Config serial port
 ser = serial.Serial("COM3", 115200)
 
-# Buffers pour chaque micro
+# Buffers 
 buffer_raw_L = deque(maxlen=500)
 buffer_dB_L  = deque(maxlen=500)
 buffer_raw_R = deque(maxlen=500)
 buffer_dB_R  = deque(maxlen=500)
 
 plt.ion()
-fig, axes = plt.subplots(2, 2, figsize=(10, 6))  # 2 lignes × 2 colonnes
+fig, axes = plt.subplots(2, 2, figsize=(10, 6)) 
 axL_raw, axL_dB, axR_raw, axR_dB = axes[0,0], axes[1,0], axes[0,1], axes[1,1]
 
 axL_raw.set_title("Signal brut - Gauche")
@@ -51,7 +51,7 @@ while True:
         buffer_dB_R.append(dBFS + 120)
 
 
-    # Mise à jour graphique
+    # Update graphs
     axL_raw.clear()
     axL_dB.clear()
     axR_raw.clear()
