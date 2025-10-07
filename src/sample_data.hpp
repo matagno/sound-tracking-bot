@@ -9,10 +9,5 @@ struct SampleData {
     std::vector<float> bufferL;
     std::vector<float> bufferR;
     float angle;
+    void init_value(bool wMutex = true);
 };
-
-// Var
-extern SampleData sample_data;
-
-// Fonction
-void init_sample_data();

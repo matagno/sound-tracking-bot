@@ -94,12 +94,12 @@ void i2s_task(void* arg) {
                 windowR.clear();
 
                 // Log & Com
-                ESP_LOGI("I2S_TASK", "Angle: %.2f degrees", angle);
+                // ESP_LOGI("I2S_TASK", "Angle: %.2f degrees", angle);
                 register_angle(angle);
             }
 
             // Log & Com
-            register_samples(filtered_left, filtered_right);
+            // register_samples(filtered_left, filtered_right);
             
         }
     }

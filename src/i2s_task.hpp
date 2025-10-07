@@ -16,3 +16,4 @@ extern std::vector<float> windowR;
 void init_i2s();
 void i2s_task(void* arg);
 void register_samples(float left, float right);
+void register_angle(float angle);

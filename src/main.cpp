@@ -31,6 +31,7 @@ BiquadFilter bpFilterR;
 ////////////////////////////////////////////
 
 ///////// VARIABLE COMMUNICATION ////////////
+WebSocketServer wsServer(80);
 SampleData sample_data; 
 ////////////////////////////////////////////
 
@@ -52,7 +53,11 @@ extern "C" void app_main(void) {
     ///////////////////////// CYCLE ////////////////////////////
 
     // Init Data 
-    init_sample_data();
+    sample_data.init_value();
+
+    // Init Wifi + WS
+    wsServer.init_wifi_softap("ESP_Spider", "12345678");
+    wsServer.init_ws();
     
     // Init I2S
     init_i2s();
@@ -62,8 +67,9 @@ extern "C" void app_main(void) {
     bpFilterR.setupBandpass(500.0f, 1000.0f, 44100.0f);
 
     // Task
+    xTaskCreate(WebSocketServer::sendTask, "ws_send_task", 4096, &wsServer, 5, nullptr);
     xTaskCreate(i2s_task, "I2S_Task", 4096, NULL, 5, NULL);
-    xTaskCreate(com_task, "Com_Task", 4096, NULL, 1, NULL);
+    //xTaskCreate(com_task, "Com_Task", 4096, NULL, 1, NULL);
 
     vTaskDelete(NULL);
 
