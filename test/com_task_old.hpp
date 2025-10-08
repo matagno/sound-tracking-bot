@@ -1,7 +1,7 @@
 #pragma once
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
-#include "sample_data.hpp"
+#include "utils/sample_data.hpp"
 #include <vector>
 
 // Var

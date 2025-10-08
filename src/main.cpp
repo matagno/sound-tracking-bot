@@ -12,10 +12,10 @@
 
 #include "driver/i2s.h"
 
-#include "biquad_filter.hpp"
-#include "i2s_task.hpp"
-#include "com_task.hpp"
-#include "sample_data.hpp"
+#include "task_class/i2s_task.hpp"
+#include "task_class/com_task.hpp"
+#include "utils/biquad_filter.hpp"
+#include "utils/sample_data.hpp"
 
 
 

@@ -2,7 +2,6 @@
 
 #include "esp_log.h"
 #include "driver/i2s.h"
-#include "biquad_filter.hpp"
 #include <vector>
 #include <cstdio>
 
