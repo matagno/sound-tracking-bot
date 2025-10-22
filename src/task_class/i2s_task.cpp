@@ -62,82 +62,85 @@ void i2s_task(void* arg) {
             float filtered_right = bpFilterR.process(right);
 
             // Cross-correlation
-            windowL.push_back(filtered_left);
-            windowR.push_back(filtered_right);
-            if (windowL.size() >= WINDOW_SIZE && windowR.size() >= WINDOW_SIZE)
-            {
-                int maxLag = 50; 
-                int bestLag = 0;
-                float maxCorr = -1e9;
+            if (windowL.size() < WINDOW_SIZE && windowR.size() < WINDOW_SIZE) {
+                windowL.push_back(filtered_left);
+                windowR.push_back(filtered_right);
+            } else {
+                // Register      
+                if(xSemaphoreTake(sample_data.mutex_buffer, portMAX_DELAY) == pdTRUE) {
+                    sample_data.bufferR = windowR;
+                    sample_data.bufferL = windowL;
 
-                for (int lag = -maxLag; lag <= maxLag; lag++) {
-                    float corr = 0;
-                    for (size_t i = 0; i < WINDOW_SIZE; i++) {
-                        int j = i + lag;
-                        if (j >= 0 && j < WINDOW_SIZE) {
-                            corr += windowL[i] * windowR[j];
-                        }
-                    }
-                    if (corr > maxCorr) {
-                        maxCorr = corr;
-                        bestLag = lag;
-                    }
+                    xSemaphoreGive(sample_data.mutex_buffer);
                 }
-
-                // Calcul angle degree
-                float timeDelay = float(bestLag) / SAMPLE_RATE;
-                float angle = asin(timeDelay * 343.0f / MIC_DISTANCE) * (180.0f / M_PI);
 
                 // Clear
                 windowL.clear();
                 windowR.clear();
-
-                // Log & Com
-                // ESP_LOGI("I2S_TASK", "Angle: %.2f degrees", angle);
-                register_angle(angle);
             }
-
-            // Log & Com
-            // register_samples(filtered_left, filtered_right);
-            
         }
+        taskYIELD();
     }
 }
 
 
+// Cross-correlation and angle calculation
+int calculate_angle(const std::vector<float>& sigL, const std::vector<float>& sigR) {
+    int maxLag = 88; 
+    int bestLag = 0;
+    float maxCorr = 0;
 
-
-
-// Com function
-void register_samples(float left, float right) {
-    static int counter_buffer = 0;
-    if(xSemaphoreTake(sample_data.mutex, portMAX_DELAY) == pdTRUE) {
-        if (++counter_buffer >= SAMPLE_RATE/10) {  
-            sample_data.bufferR.push_back(right);
-            sample_data.bufferL.push_back(left);
-            counter_buffer = 0;
+    for (int lag = -maxLag; lag <= maxLag; lag++) {
+        float corr = 0;
+        for (size_t i = 0; i < sigL.size(); i++) {
+            int j = i + lag;
+            if (j >= 0 && j < sigR.size()) {
+                corr += sigL[i] * sigR[j];
+            }
         }
-
-        // Secu overflow
-        if (sample_data.bufferR.size() > MAX_BUFFER || sample_data.bufferL.size() > MAX_BUFFER) {
-            sample_data.bufferR.clear();
-            sample_data.bufferL.clear();
-            ESP_LOGW("I2S_TASK", "BufferL overflow, trimming buffer");
+        if (corr > maxCorr) {
+            maxCorr = corr;
+            bestLag = lag;
         }
-        xSemaphoreGive(sample_data.mutex);
     }
+
+    // Check treshold, only consider significant sound detected
+    if (maxCorr < 0.0001f) {
+        return 9999; 
+    }
+
+
+    // Calculate angle in degrees
+    float timeDelay = float(bestLag) / SAMPLE_RATE;
+    float angle = asin(timeDelay * 343.0f / MIC_DISTANCE) * (180.0f / M_PI);
+
+    ESP_LOGI("I2S_TASK", "Angle: %.2f degrees", angle);
+    return angle;
 }
 
-void register_angle(float angle) {
-    static int counter_angle = 0;
-    if(xSemaphoreTake(sample_data.mutex, portMAX_DELAY) == pdTRUE) {
-        if (++counter_angle >= SAMPLE_RATE/10) {  
+
+
+// Register angle
+void register_angle() {
+    static std::vector<float> localL;
+    static std::vector<float> localR;
+
+    if (xSemaphoreTake(sample_data.mutex_buffer, portMAX_DELAY) == pdTRUE) {
+        localL = sample_data.bufferL;
+        localR = sample_data.bufferR;
+        xSemaphoreGive(sample_data.mutex_buffer);
+    }
+
+    // Calcul
+    if (!localL.empty() && !localR.empty()) {
+        int angle = calculate_angle(localL, localR);
+        if (xSemaphoreTake(sample_data.mutex_angle, portMAX_DELAY) == pdTRUE) {
             sample_data.angle = angle;
-            counter_angle = 0;
+            xSemaphoreGive(sample_data.mutex_angle);
         }
-        xSemaphoreGive(sample_data.mutex);
     }
 }
+
 
 
 

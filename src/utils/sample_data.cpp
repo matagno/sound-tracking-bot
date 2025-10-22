@@ -3,9 +3,14 @@
 
 void SampleData::init_value(bool wMutex) {
     if (wMutex){
-        mutex = xSemaphoreCreateMutex();
-        if (mutex == NULL) {
-            ESP_LOGE("INIT", "Erreur: échec de création du data_mutex !");
+        mutex_buffer = xSemaphoreCreateMutex();
+        if (mutex_buffer == NULL) {
+            ESP_LOGE("INIT", "Erreur: échec de création du mutex_buffer !");
+            abort();
+        }
+        mutex_angle = xSemaphoreCreateMutex();
+        if (mutex_angle == NULL) {
+            ESP_LOGE("INIT", "Erreur: échec de création du mutex_angle !");
             abort();
         }
     }
@@ -13,3 +18,5 @@ void SampleData::init_value(bool wMutex) {
     bufferL.clear();
     bufferR.clear();
 }
+
+

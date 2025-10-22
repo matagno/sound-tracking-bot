@@ -37,6 +37,18 @@ SampleData sample_data;
 
 
 
+
+
+void angle_task(void* arg) {
+    for(;;) {
+        register_angle();
+        vTaskDelay(pdMS_TO_TICKS(1000));
+    }
+}
+
+
+
+
 extern "C" void app_main(void) {
 
     /////////////////////////////////   INFO CHIP   //////////////////////////////////////////
@@ -67,9 +79,8 @@ extern "C" void app_main(void) {
     bpFilterR.setupBandpass(500.0f, 1000.0f, 44100.0f);
 
     // Task
-    xTaskCreate(WebSocketServer::sendTask, "ws_send_task", 4096, &wsServer, 5, nullptr);
     xTaskCreate(i2s_task, "I2S_Task", 4096, NULL, 5, NULL);
-    //xTaskCreate(com_task, "Com_Task", 4096, NULL, 1, NULL);
+    xTaskCreate(angle_task, "Angle_Task", 4096, NULL, 4, NULL);
 
     vTaskDelete(NULL);
 
@@ -77,4 +88,26 @@ extern "C" void app_main(void) {
     
 }
 
+
+
+/*      Note        */
+/*
+Client websocket :
+With wscat : wscat -c ws://192.168.4.1:80/ws
+ping > pong
+angle > angle value
+*/
+/*
+Angle calculation :
+Rsultat entre -90 et 90 degres
+9999 = pas de son detecte
+*/
+/*
+Regle mouvement robot :
+Si angle entre -20 et 20 degres : avancer tout droit
+Si angle entre 20 et 90 degres : tourner a droite de angle degres puis reverifier angle
+Si angle entre -20 et -90 degres : tourner a gauche de angle degres puis reverifier angle
+Pas de probleme de direction car on reverifie l'angle apres chaque rotation
+9999 = pas de son detecte
+*/
 
