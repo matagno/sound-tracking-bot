@@ -4,7 +4,7 @@
 class BiquadFilter {
 public:
     BiquadFilter();
-    void setupBandpass(float f1, float f2, float fs);
+    void setup_bandpass(float f1, float f2, float fs);
     float process(float x0);
 
 private:

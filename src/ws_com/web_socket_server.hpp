@@ -11,9 +11,10 @@ extern SampleData sample_data;
 class WebSocketServer {
 public:
     WebSocketServer(int port = 80);
-    // Wifi
+    // Add Attributes for HMI variables
+
+    // Init functions
     void init_wifi_softap(const std::string& ssid, const std::string& pass);
-    // WS
     void init_ws();
 
 private:

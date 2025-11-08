@@ -4,7 +4,7 @@ BiquadFilter::BiquadFilter()
     : a0(0), a1(0), a2(0), b1(0), b2(0), x1(0), x2(0), y1(0), y2(0) {}
 
 // Config bandpass filter
-void BiquadFilter::setupBandpass(float f1, float f2, float fs) {
+void BiquadFilter::setup_bandpass(float f1, float f2, float fs) {
     float f0 = sqrt(f1 * f2);       // Centre frequency
     float Q  = sqrt(f2 / f1);       // Quality factor
     float w0 = 2.0f * M_PI * f0 / fs;

@@ -96,10 +96,7 @@ esp_err_t WebSocketServer::wsHandler(httpd_req_t* req) {
         }
         if (msg == "angle") {
             std::string angle_str;
-            if (xSemaphoreTake(sample_data.mutex_angle, portMAX_DELAY) == pdTRUE) {
-                angle_str = std::to_string(sample_data.angle);
-                xSemaphoreGive(sample_data.mutex_angle);
-            }
+            angle_str = std::to_string(sample_data.getAngle());
             sendMessage(angle_str, req); 
         }
     } 

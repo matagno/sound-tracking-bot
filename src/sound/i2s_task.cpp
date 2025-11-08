@@ -6,14 +6,9 @@
 #include <cstdio>
 
 // I2S
-#define SAMPLE_RATE 44100
 #define I2S_NUM I2S_NUM_0
-// For cross-correlation and angle calculation
+// For cross-correlation 
 #define WINDOW_SIZE 441
-#define MIC_DISTANCE 0.10
-// For com
-#define MAX_BUFFER 100
-
 
 
 void init_i2s() {
@@ -82,65 +77,6 @@ void i2s_task(void* arg) {
         taskYIELD();
     }
 }
-
-
-// Cross-correlation and angle calculation
-int calculate_angle(const std::vector<float>& sigL, const std::vector<float>& sigR) {
-    int maxLag = 88; 
-    int bestLag = 0;
-    float maxCorr = 0;
-
-    for (int lag = -maxLag; lag <= maxLag; lag++) {
-        float corr = 0;
-        for (size_t i = 0; i < sigL.size(); i++) {
-            int j = i + lag;
-            if (j >= 0 && j < sigR.size()) {
-                corr += sigL[i] * sigR[j];
-            }
-        }
-        if (corr > maxCorr) {
-            maxCorr = corr;
-            bestLag = lag;
-        }
-    }
-
-    // Check treshold, only consider significant sound detected
-    if (maxCorr < 0.0001f) {
-        return 9999; 
-    }
-
-
-    // Calculate angle in degrees
-    float timeDelay = float(bestLag) / SAMPLE_RATE;
-    float angle = asin(timeDelay * 343.0f / MIC_DISTANCE) * (180.0f / M_PI);
-
-    ESP_LOGI("I2S_TASK", "Angle: %.2f degrees", angle);
-    return angle;
-}
-
-
-
-// Register angle
-void register_angle() {
-    static std::vector<float> localL;
-    static std::vector<float> localR;
-
-    if (xSemaphoreTake(sample_data.mutex_buffer, portMAX_DELAY) == pdTRUE) {
-        localL = sample_data.bufferL;
-        localR = sample_data.bufferR;
-        xSemaphoreGive(sample_data.mutex_buffer);
-    }
-
-    // Calcul
-    if (!localL.empty() && !localR.empty()) {
-        int angle = calculate_angle(localL, localR);
-        if (xSemaphoreTake(sample_data.mutex_angle, portMAX_DELAY) == pdTRUE) {
-            sample_data.angle = angle;
-            xSemaphoreGive(sample_data.mutex_angle);
-        }
-    }
-}
-
 
 
 
