@@ -1,4 +1,4 @@
-#include "com_handle.hpp"
+#include "web_socket_server.hpp"
 #include <cstring>
 #include <algorithm>
 #include "freertos/FreeRTOS.h"
@@ -8,8 +8,8 @@
 #include "esp_wifi.h"
 #include "nvs_flash.h"
 
-WebSocketServer::WebSocketServer(int p) 
-    : port(p), server(nullptr) {}
+WebSocketServer::WebSocketServer(BotCtrl &bot_ctrl)
+    : adrBot_ctrl(bot_ctrl), adrCmd_Data(bot_ctrl.adrCmd_data), _server(nullptr){}
 
 
 //////////////////////////////// PUBLIC ///////////////////////////
@@ -47,22 +47,22 @@ void WebSocketServer::init_wifi_softap(const std::string& ssid, const std::strin
 
 
 // Init WS
-void WebSocketServer::init_ws() {
+void WebSocketServer::init_ws(int port) {
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();
     config.server_port = port;
-    httpd_start(&server, &config);
+    httpd_start(&_server, &config);
 
     httpd_uri_t ws_uri = {
         .uri = "/ws",
         .method = HTTP_GET,
         .handler = [](httpd_req_t* req) -> esp_err_t {
             WebSocketServer* obj = (WebSocketServer*)req->user_ctx;
-            return obj->wsHandler(req);
+            return obj->ws_handler(req);
         },
         .user_ctx = this,
         .is_websocket = true
     };
-    httpd_register_uri_handler(server, &ws_uri);
+    httpd_register_uri_handler(_server, &ws_uri);
 
     ESP_LOGI("WS_Server", "WebSocket server started on port %d", port);
 }
@@ -74,7 +74,7 @@ void WebSocketServer::init_ws() {
 
 
 
-esp_err_t WebSocketServer::wsHandler(httpd_req_t* req) {
+esp_err_t WebSocketServer::ws_handler(httpd_req_t* req) {
 
     // Connect
     if (req->method == HTTP_GET) {
@@ -85,21 +85,17 @@ esp_err_t WebSocketServer::wsHandler(httpd_req_t* req) {
     // Receive
     httpd_ws_frame_t ws_pkt;
     memset(&ws_pkt, 0, sizeof(ws_pkt));
-    ws_pkt.payload = (uint8_t*) readBufWS;
+    ws_pkt.payload = (uint8_t*) bufRead_ws;
     esp_err_t ret = httpd_ws_recv_frame(req, &ws_pkt, 1024);
     if (ret == ESP_OK && ws_pkt.len > 0) {
-        std::string msg((char*)ws_pkt.payload, ws_pkt.len);
-        onMessageReceived(msg);
-        // Respond
-        if (msg == "ping") {
-            sendMessage("pong", req); 
-        }
-        if (msg == "angle") {
-            std::string angle_str;
-            angle_str = std::to_string(sample_data.getAngle());
-            sendMessage(angle_str, req); 
-        }
-    } 
+        char msg[128];
+        size_t len = ws_pkt.len;
+        if (len >= sizeof(msg)) len = sizeof(msg) - 1;
+        memcpy(msg, ws_pkt.payload, len);
+        msg[len] = '\0';
+
+        on_message_received(msg, req);
+    }
     
     // Disconnect
     if (ret != ESP_OK) {
@@ -110,16 +106,83 @@ esp_err_t WebSocketServer::wsHandler(httpd_req_t* req) {
     return ESP_OK;
 }
 
-void WebSocketServer::onMessageReceived(const std::string& msg) {
-    ESP_LOGI("WS_Server", "Message received: %s", msg.c_str());
+void WebSocketServer::on_message_received(const char* msg, httpd_req_t* req) {
+    ESP_LOGI("WS_Server", "Message received: %s", msg);
+
+    if (strcmp(msg, "ping") == 0) {
+        send_message("pong", req); 
+    }
+
+    // Send Info
+    if (strcmp(msg, "get_angle") == 0) {
+        char strAngle[32];
+        if (xSemaphoreTake(adrBot_ctrl.mutexData_transmit, 0) == pdTRUE) {
+            snprintf(strAngle, sizeof(strAngle), "%.2f", adrBot_ctrl.fAngle);
+            xSemaphoreGive(adrBot_ctrl.mutexData_transmit);
+        }
+        send_message(strAngle, req); 
+    }
+
+    // Recieve Info
+    if (xSemaphoreTake(adrCmd_Data.mutexAll, portMAX_DELAY) == pdTRUE) {
+        setBoolCommand(msg, "set_auto-", adrCmd_Data.xAuto);
+        setBoolCommand(msg, "set_manual-", adrCmd_Data.xManu);
+        setBoolCommand(msg, "set_teleop-", adrCmd_Data.xTeleop);
+        setBoolCommand(msg, "set_teleop_run-", adrCmd_Data.xTeleop_run);
+        setBoolCommand(msg, "set_teleop_turn-", adrCmd_Data.xTeleop_turn);
+        xSemaphoreGive(adrCmd_Data.mutexAll);
+    }
+
+    if (strncmp(msg, "set_qTarget-", 12) == 0) {
+        // set_qTarget-<valeur>-<index>
+        float value = 0.0f;
+        int index = -1;
+        if (sscanf(msg + 12, "%f-%d", &value, &index) == 2) {
+            if (index >= 0 && index < 12) {
+                if (xSemaphoreTake(adrCmd_Data.mutexAll, pdMS_TO_TICKS(10)) == pdTRUE) {
+                    adrCmd_Data.qTarget_manual[index] = value;
+                    xSemaphoreGive(adrCmd_Data.mutexAll);
+                }
+            }
+        }
+    }
+    if (strncmp(msg, "set_qActive-", 12) == 0) {
+        // set_qActive-<true/false>-<index>
+        char state[8];
+        int index = -1;
+        if (sscanf(msg + 12, "%7[^-]-%d", state, &index) == 2) {
+            for (int i = 0; state[i]; ++i)
+                state[i] = tolower((unsigned char)state[i]);
+
+            bool value = (strcmp(state, "true") == 0);
+            if (index >= 0 && index < 12) {
+                if (xSemaphoreTake(adrCmd_Data.mutexAll, pdMS_TO_TICKS(10)) == pdTRUE) {
+                    adrCmd_Data.qActive_manual[index] = value;
+                    xSemaphoreGive(adrCmd_Data.mutexAll);
+                }
+            }
+        }
+    }
 }
 
-void WebSocketServer::sendMessage(const std::string& msg, httpd_req_t* client) {
+
+void WebSocketServer::setBoolCommand(const char* msg, const char* prefix, bool& target) {
+    size_t len = strlen(prefix);
+    if (strncmp(msg, prefix, len) == 0) {
+        const char* val = msg + len;
+        if (strcmp(val, "true") == 0) target = true;
+        else if (strcmp(val, "false") == 0) target = false;
+    }
+}
+
+
+
+void WebSocketServer::send_message(const char* msg, httpd_req_t* client) {
         httpd_ws_frame_t ws_pkt;
         memset(&ws_pkt, 0, sizeof(ws_pkt));
         ws_pkt.type = HTTPD_WS_TYPE_TEXT;
-        ws_pkt.payload = (uint8_t*)msg.c_str();
-        ws_pkt.len = msg.size();
+        ws_pkt.payload = (uint8_t*)msg;
+        ws_pkt.len = strlen(msg);
         httpd_ws_send_frame(client, &ws_pkt);
 }
 

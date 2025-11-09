@@ -10,102 +10,95 @@
 #include "esp_flash.h"
 #include "esp_system.h"
 
-#include "driver/i2s.h"
 
-#include "move_ik/pca9685.hpp"
-#include "move_ik/servo_ctrl.hpp"
-#include "sound/biquad_filter.hpp"
-#include "sound/sample_data.hpp"
-#include "sound/i2s_task.hpp"
-#include "ws_com/com_handle.hpp"
+#include "bot/utils/pca9685.hpp"
+#include "bot/bot_ctrl.hpp"
+
+#include "sound/i2s_sound_acquisition.hpp"
+#include "sound/utils/biquad_filter.hpp"
+#include "sound/st_sample_data.hpp"
+
+#include "ws_com/web_socket_server.hpp"
+#include "ws_com/st_cmd_data.hpp"
 
 
 
-/////////////// VARIABLE Sound /////////////
-// Init window for cross-correlation in i2s_task
-std::vector<float> windowL;
-std::vector<float> windowR;
-// Biquad filter
-BiquadFilter bpFilterL;
-BiquadFilter bpFilterR;
+//////////////////////////////////
+
+/*          Data In             */
 // Sample data
-SampleData sample_data; 
-////////////////////////////////////////////
+SampleData stSample_data; 
+// HMI data
+CmdData stCmd_data;
 
-///////// VARIABLE COMMUNICATION ///////////
-WebSocketServer ws_server(80);
-////////////////////////////////////////////
+/*          Robot Object        */
+PCA9685 objPca;
+BotCtrl objBot_ctrl(stCmd_data, stSample_data, objPca);
 
-/////////  VARIABLE ROBOT MOVE  ////////////
-// Objects
-pca9685 pca;
-servo_ctrl servo_controller(pca);
-// Variables
-std::array<float, 12> q_output;        
-std::array<bool, 12> q_output_active;
-// Remplacer par structure ou mettre dans servo_ctrl ?
-// g_stBot_State
-// With stCmd, fAngle_sound, qOutput, qOutput_active
-// g_stBot_State.stCmd with xAuto, xManu, qManual_cmd, qManual_active
-////////////////////////////////////////////
+/*          Sound Object        */
+// Biquad filter
+BiquadFilter objBiquad_filterL;
+BiquadFilter objBiquad_filterR;
+// I2s handling
+I2sSoundAcquisition objI2s_sound_scquisition(objBiquad_filterR, objBiquad_filterL, stSample_data);
 
+/*     Communication Object     */
+WebSocketServer objWS_server(objBot_ctrl);
 
+//////////////////////////////////
 
 
 
 
 
+/*          Sound Task              */
+void sound_task(void* arg) {
+    for(;;) {
+        objI2s_sound_scquisition.i2s_acquisition();
+        taskYIELD();
+    }
+}
 
 
-
-
-
-
-
-
-////////////////////// Main Cycle Task //////////////////////
+/*          Main Cycle Task         */  
 
 void cycle_task(void* arg) {
-    // Number of cycle each second 
-    const int freq_cycle = 10; 
-    // Count
+    const int freq_cycle = 10; // per sec
     int cycle_count = 0;
 
     for(;;) {
-        /////////// Input sound processing  ///////////
-        if (cycle_count == freq_cycle * 1){
-            // Mutex lock objCom_hmi.stCmd
-            // g_stBot_State.stCmd = objCom_hmi.stCmd;
-            // Mutex unlock objCom_hmi.stCmd
+        /*      Input Data processing       */
+        if(xSemaphoreTake(objBot_ctrl.mutexData_transmit, portMAX_DELAY) == pdTRUE) {
+            if (cycle_count == freq_cycle * 1){
+                objBot_ctrl.update_move_mode();
+            }
+            if (cycle_count == freq_cycle * 5){
+                objBot_ctrl.update_sound_angle();
+            }
+            xSemaphoreGive(objBot_ctrl.mutexData_transmit);
         }
-        if (cycle_count == freq_cycle * 5){
-            sample_data.registerAngle();
-            // g_stBot_State.fAngle_sound = sample_data.getAngle();
+
+        /*          Move Choice            */
+        if (objBot_ctrl.xAuto && !objBot_ctrl.xManu && !objBot_ctrl.xTeleop) {
+            if (objBot_ctrl.fAngle != 9999.0f) {
+                // If angle between -20 and 20 degres : go forward
+                // Else function to set qTarget based on fAngle
+            }
+        }
+        if (objBot_ctrl.xTeleop && !objBot_ctrl.xAuto && !objBot_ctrl.xManu) {
+            if (objBot_ctrl.xTeleop_run || objBot_ctrl.xTeleop_turn) {
+                objBot_ctrl.qActive.fill(true);
+            }
         }
 
-        ///////////         Processing       ///////////
-        // Si Auto : Calcul q
-        // fct auto_mode
-        q_output = {90.0f, 45.0f, 90.0f, 135.0f, 90.0f, 45.0f, 90.0f, 135.0f, 90.0f, 45.0f, 90.0f, 135.0f};
-        q_output_active = {true, true, true, true, true, true, true, true, true, true, true, true};
-        // Si Manuel : Send q_manual_cmd
-        // q = g_stBot_State.q_manual_cmd
-        // q_active = g_stBot_State.q_manual_active;
+        /*      Output Update       */
+        objBot_ctrl.update_servos();
 
-        ///////////     Update Output       ///////////
-        servo_controller.updateServos(q_output, q_output_active);
-
-
-        ///////////         End Cycle      ///////////
         // Reset count every minute
         cycle_count = (cycle_count + 1) % (freq_cycle * 60 + 1);
         vTaskDelay(pdMS_TO_TICKS(1000 / freq_cycle));
     }
 }
-
-///////////////////////////////////////////////////////////////
-
-
 
 
 
@@ -119,7 +112,7 @@ void cycle_task(void* arg) {
 
 extern "C" void app_main(void) {
 
-    /////////////////////////////////   INFO CHIP   //////////////////////////////////////////
+    /////////////////////////   INFO CHIP   /////////////////////////
     esp_chip_info_t chip_info;
     uint32_t flash_size;
     esp_chip_info(&chip_info);
@@ -128,24 +121,24 @@ extern "C" void app_main(void) {
     if(esp_flash_get_size(nullptr, &flash_size) == ESP_OK) {
         printf("%" PRIu32 " MB flash\n", flash_size / (1024 * 1024));
     }
-    /////////////////////////////////////////////////////////////////////////////////////////   
 
-    ///////////////////////// CYCLE ////////////////////////////
+    /////////////////////////  START CYCLE  /////////////////////////
 
     // Init Comunication
-    ws_server.init_wifi_softap("ESP_Spider", "12345678");
-    ws_server.init_ws();
+    objWS_server.init_wifi_softap("ESP_Spider", "12345678");
+    objWS_server.init_ws(80);
     
     // Init Sound
-    bpFilterL.setup_bandpass(500.0f, 1000.0f, 44100.0f);
-    bpFilterR.setup_bandpass(500.0f, 1000.0f, 44100.0f);
-    init_i2s();
+    objBiquad_filterL.setup_bandpass(500.0f, 1000.0f, 44100.0f);
+    objBiquad_filterR.setup_bandpass(500.0f, 1000.0f, 44100.0f);
+    objI2s_sound_scquisition.init_i2s();
 
     // Init Bot ctrl
-    pca.init();
+    objPca.init_pca();
+    objBot_ctrl.init_value();
 
     // Task
-    xTaskCreate(i2s_task, "I2S_Task", 4096, NULL, 5, NULL);
+    xTaskCreate(sound_task, "I2S_Task", 4096, NULL, 5, NULL);
     xTaskCreate(cycle_task, "Cycle_Task", 4096, NULL, 4, NULL);
 
     vTaskDelete(NULL);
@@ -176,18 +169,4 @@ Si angle entre -20 et -90 degres : tourner a gauche de angle degres puis reverif
 Pas de probleme de direction car on reverifie l'angle apres chaque rotation
 9999 = pas de son detecte
 */
-
-/*
-Ameliorations structure code possibles :
-- Transformer i2s_task en classe
-- Mettre des pointeurs vers les classes BiquadFilter et SampleData dans i2s_task
-- Uniformiser nom var et commentaires
-*/
-
-
-// Prochaine fois :
-// Transformer servo_ctrl en robot_ctrl avec g_stBot_State dedans
-// Ajouter methode mode auto et fonction cinématique
-// Ajouter variable de l'ihm dans com_handle et le renommer
-// Changer les noms de variables
 

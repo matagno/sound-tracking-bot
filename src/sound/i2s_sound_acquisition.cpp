@@ -1,17 +1,18 @@
-#include "i2s_task.hpp"
+#include "i2s_sound_acquisition.hpp"
 
 #include "esp_log.h"
 #include "driver/i2s.h"
 #include <vector>
 #include <cstdio>
 
-// I2S
-#define I2S_NUM I2S_NUM_0
-// For cross-correlation 
-#define WINDOW_SIZE 441
+
+I2sSoundAcquisition::I2sSoundAcquisition(BiquadFilter &biquad_filterR, BiquadFilter &biquad_filterL, SampleData &sample_data)
+    : refBiquad_filterR(biquad_filterR), refBiquad_filterL(biquad_filterL), refSample_data(sample_data){}
 
 
-void init_i2s() {
+
+
+void I2sSoundAcquisition::init_i2s() {
     // Configuration I2S
     i2s_config_t i2s_config = {
         .mode = (i2s_mode_t)(I2S_MODE_MASTER | I2S_MODE_RX),
@@ -41,8 +42,7 @@ void init_i2s() {
 
 
 // Main I2S task
-void i2s_task(void* arg) {
-    for(;;) {
+void I2sSoundAcquisition::i2s_acquisition() {
         int32_t samples[2];  // [0] = left, [1] = right
         size_t bytes_read;
         i2s_read(I2S_NUM_0, samples, sizeof(samples), &bytes_read, portMAX_DELAY);
@@ -53,8 +53,8 @@ void i2s_task(void* arg) {
             float right = float(samples[1] >> 8) / 8388608.0f;
             
             // Filtred angle
-            float filtered_left = bpFilterL.process(left);
-            float filtered_right = bpFilterR.process(right);
+            float filtered_left = refBiquad_filterL.process(left);
+            float filtered_right = refBiquad_filterR.process(right);
 
             // Cross-correlation
             if (windowL.size() < WINDOW_SIZE && windowR.size() < WINDOW_SIZE) {
@@ -62,11 +62,11 @@ void i2s_task(void* arg) {
                 windowR.push_back(filtered_right);
             } else {
                 // Register      
-                if(xSemaphoreTake(sample_data.mutex_buffer, portMAX_DELAY) == pdTRUE) {
-                    sample_data.bufferR = windowR;
-                    sample_data.bufferL = windowL;
+                if(xSemaphoreTake(refSample_data.mutexAll, portMAX_DELAY) == pdTRUE) {
+                    refSample_data.vecSamplesR = windowR;
+                    refSample_data.vecSamplesL = windowL;
 
-                    xSemaphoreGive(sample_data.mutex_buffer);
+                    xSemaphoreGive(refSample_data.mutexAll);
                 }
 
                 // Clear
@@ -74,8 +74,6 @@ void i2s_task(void* arg) {
                 windowR.clear();
             }
         }
-        taskYIELD();
-    }
 }
 
 
