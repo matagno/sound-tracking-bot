@@ -168,8 +168,8 @@ extern "C" void app_main(void) {
     stCmd_data.init_value();
     
     // Init Sound
-    //objBiquad_filterL.setup_bandpass(500.0f, 1000.0f, 44100.0f);
-    objBiquad_filterR.setup_bandpass(500.0f, 1000.0f, 44100.0f);
+    objBiquad_filterL.setup_bandpass(1000.0f, 1200.0f, 44100.0f);
+    objBiquad_filterR.setup_bandpass(1000.0f, 1200.0f, 44100.0f);
     objI2s_sound_scquisition.init_i2s();
     stSample_data.init_value();
 

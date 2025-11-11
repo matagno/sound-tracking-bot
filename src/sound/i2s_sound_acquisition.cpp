@@ -63,12 +63,10 @@ void I2sSoundAcquisition::i2s_acquisition() {
                 windowL.push_back(filtered_left);
                 windowR.push_back(filtered_right);
             } else {
-                // Register      
-                ESP_LOGI("Sound", "CC1");
+                // Register  
                 if(xSemaphoreTake(refSample_data.mutexAll, portMAX_DELAY) == pdTRUE) {
                     refSample_data.vecSamplesR = windowR;
                     refSample_data.vecSamplesL = windowL;
-                    ESP_LOGI("Sound", "CC2");
 
                     xSemaphoreGive(refSample_data.mutexAll);
                 }

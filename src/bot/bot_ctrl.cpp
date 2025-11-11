@@ -74,7 +74,7 @@ void BotCtrl::update_sound_angle() {
     static std::vector<float> localL;
     static std::vector<float> localR;
 
-    if (xSemaphoreTake(adrSample_data.mutexAll, 0) == pdTRUE) {
+    if (xSemaphoreTake(adrSample_data.mutexAll, portMAX_DELAY) == pdTRUE) {
         localL = adrSample_data.vecSamplesL;
         localR = adrSample_data.vecSamplesR;
         xSemaphoreGive(adrSample_data.mutexAll);
@@ -83,6 +83,7 @@ void BotCtrl::update_sound_angle() {
     // Calcul
     if (!localL.empty() && !localR.empty()) {
         fAngle = calculate_angle(localL, localR);
+        fAngle = (fAngle > 180.0f || fAngle < -180.0f) ? 9999.0f : fAngle;
     }
 }
 
@@ -92,6 +93,7 @@ int BotCtrl::calculate_angle(const std::vector<float>& sigL, const std::vector<f
     int maxLag = 88; 
     int bestLag = 0;
     float maxCorr = 0;
+    
 
     for (int lag = -maxLag; lag <= maxLag; lag++) {
         float corr = 0;
@@ -108,15 +110,15 @@ int BotCtrl::calculate_angle(const std::vector<float>& sigL, const std::vector<f
     }
 
     // Check treshold, only consider significant sound detected
-    //if (maxCorr < 0.0001f) {
-        //return 9999; 
-    //}
+    if (maxCorr < 0.00001f) {
+        return 9999; 
+    }
 
 
     // Calculate angle in degrees
     float timeDelay = float(bestLag) / SAMPLE_RATE;
     float angle = asin(timeDelay * 343.0f / MIC_DISTANCE) * (180.0f / M_PI);
-    ESP_LOGI("I2S_TASK", "Angle: %.2f degrees", angle);
+    ESP_LOGI("I2S_TASK", "Angle: %.2f degrees, Lag %f, Time %f", angle, float(bestLag), timeDelay);
 
     return angle;
 }
