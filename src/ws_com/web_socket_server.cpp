@@ -107,7 +107,6 @@ esp_err_t WebSocketServer::ws_handler(httpd_req_t* req) {
 }
 
 void WebSocketServer::on_message_received(const char* msg, httpd_req_t* req) {
-    ESP_LOGI("WS_Server", "Message received: %s", msg);
 
     if (strcmp(msg, "ping") == 0) {
         send_message("pong", req); 
@@ -120,6 +119,7 @@ void WebSocketServer::on_message_received(const char* msg, httpd_req_t* req) {
             snprintf(strAngle, sizeof(strAngle), "%.2f", adrBot_ctrl.fAngle);
             xSemaphoreGive(adrBot_ctrl.mutexData_transmit);
         }
+        ESP_LOGI("WS_Server", "Ask angle, respond : %s", strAngle);
         send_message(strAngle, req); 
     }
 
@@ -131,6 +131,18 @@ void WebSocketServer::on_message_received(const char* msg, httpd_req_t* req) {
         setBoolCommand(msg, "set_teleop_run-", adrCmd_Data.xTeleop_run);
         setBoolCommand(msg, "set_teleop_turn-", adrCmd_Data.xTeleop_turn);
         xSemaphoreGive(adrCmd_Data.mutexAll);
+    }
+
+    if (strncmp(msg, "set_teleop_angle-", 17) == 0) {
+        // set_teleop_angle-<valeur>
+        float value = 0.0f;
+        if (sscanf(msg + 17, "%f", &value) == 1) {
+            if (xSemaphoreTake(adrCmd_Data.mutexAll, portMAX_DELAY) == pdTRUE) {
+                adrCmd_Data.fTeleop_angle = value;
+                ESP_LOGI("WS_Server", "Cmd received: set_teleop_angle %f", value);
+                xSemaphoreGive(adrCmd_Data.mutexAll);
+            }
+        }
     }
 
     if (strncmp(msg, "set_qTarget-", 12) == 0) {

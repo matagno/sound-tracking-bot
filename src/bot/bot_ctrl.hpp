@@ -28,8 +28,10 @@ public:
     bool xTeleop;
     bool xTeleop_run;
     bool xTeleop_turn;
+    float fTeleop_angle;
     std::array<float, 12> qTarget;
     std::array<bool, 12> qActive;
+    bool turn_in_progress;
 
 
     // Methods 

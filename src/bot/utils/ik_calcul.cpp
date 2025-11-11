@@ -8,7 +8,7 @@ std::array<double,3> ik_leg(const std::array<double,3>& target,
                             double tl,
                             double fl,
                             double offset_foot_angle) {
-
+        
     // Compute local target in leg frame
     std::array<double,3> local_target = { target[0]-leg_base[0],
                                           target[1]-leg_base[1],
@@ -20,6 +20,8 @@ std::array<double,3> ik_leg(const std::array<double,3>& target,
     double x = cosR * local_target[0] - sinR * local_target[1];
     double y = sinR * local_target[0] + cosR * local_target[1];
     double z = local_target[2];
+    
+    
 
     // Projection for knee and foot
     double horiz = hypot(x, y);

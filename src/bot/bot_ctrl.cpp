@@ -29,6 +29,8 @@ void BotCtrl::update_move_mode() {
         if (xManu && !xAuto && !xTeleop) {
             qActive = adrCmd_data.qActive_manual;
             qTarget = adrCmd_data.qTarget_manual;
+        }else{
+            qActive.fill(true);
         }
         if (xTeleop && !xManu && !xAuto) {
             xTeleop_run = adrCmd_data.xTeleop_run;
@@ -48,15 +50,12 @@ void BotCtrl::set_servo_angle(uint8_t id, float angle) {
     float ratio = (angle - SERVO_MIN_ANGLE) / (SERVO_MAX_ANGLE - SERVO_MIN_ANGLE);
     uint16_t ticks = SERVO_MIN_TICK + static_cast<uint16_t>((SERVO_MAX_TICK - SERVO_MIN_TICK) * ratio);
 
-    ESP_LOGI("CMD", "Ticks %i", ticks);
-
     adrPCA.set_PWM(id, 0, ticks);
 }
 
 void BotCtrl::update_servos() {
     for (int i = 0; i < 12; ++i) {
         if (qActive[i]) {
-            ESP_LOGI("CMD", "Check Moteur ");
             set_servo_angle(i, qTarget[i]);
         }
     }
@@ -109,15 +108,15 @@ int BotCtrl::calculate_angle(const std::vector<float>& sigL, const std::vector<f
     }
 
     // Check treshold, only consider significant sound detected
-    if (maxCorr < 0.0001f) {
-        return 9999; 
-    }
+    //if (maxCorr < 0.0001f) {
+        //return 9999; 
+    //}
 
 
     // Calculate angle in degrees
     float timeDelay = float(bestLag) / SAMPLE_RATE;
     float angle = asin(timeDelay * 343.0f / MIC_DISTANCE) * (180.0f / M_PI);
-    //ESP_LOGI("I2S_TASK", "Angle: %.2f degrees", angle);
+    ESP_LOGI("I2S_TASK", "Angle: %.2f degrees", angle);
 
     return angle;
 }
@@ -134,7 +133,7 @@ void BotCtrl::autonomous_move(float t, float angle_target, bool run_cmd, bool tu
     const float step_length = 130.0f;
     const float step_height = 70.0f;
     const float step_height_rot = 45.0f;
-    const float T = 0.25f;
+    const float T = 2; //0.25f;
     const float T_rot = 0.5f;
 
     float phase_AVD_ARG = t;
@@ -152,6 +151,7 @@ void BotCtrl::autonomous_move(float t, float angle_target, bool run_cmd, bool tu
         if (!turn_last_cycle) {
             t0_rot = t;
             angle_to_turn = angle_target;
+            turn_in_progress = true;
         }
         t_rot = t - t0_rot;
         float angle_rot_past = (angle_target > 0.0f) ? fminf(angle_to_turn, M_PI/8.0f)
@@ -159,7 +159,11 @@ void BotCtrl::autonomous_move(float t, float angle_target, bool run_cmd, bool tu
         z_std = -60.0f;
         if (t_rot >= T_rot) {
             angle_to_turn -= angle_rot_past;
-            if (fabsf(angle_to_turn) > 0.001f) t0_rot = t;
+            if (fabsf(angle_to_turn) > 0.001f) {
+                t0_rot = t;
+            }else{
+                turn_in_progress = false;
+            }
         }
         angle_rot = (angle_target > 0.0f) ? fminf(angle_to_turn, M_PI/8.0f)
                                           : fmaxf(angle_to_turn, -M_PI/8.0f);
@@ -181,12 +185,12 @@ void BotCtrl::autonomous_move(float t, float angle_target, bool run_cmd, bool tu
         y -= y_leg_offset_std;
     }
     auto hip_knee_foot = ik_leg({x, y, z}, 0.0);
-    qTarget[6] = static_cast<float>(hip_knee_foot[0]);
-    qTarget [7] = static_cast<float>(hip_knee_foot[1]);
-    qTarget [8] = static_cast<float>(hip_knee_foot[2]);
+    qTarget[6] = static_cast<float>((hip_knee_foot[0]* (180.0 / M_PI))+90.0);
+    qTarget[7] = static_cast<float>(90-(hip_knee_foot[1]* (180.0 / M_PI)));
+    qTarget[8] = static_cast<float>(-(hip_knee_foot[2]* (180.0 / M_PI)));    
 
     // ARG
-    x = -x_std; y = -y_std; z = z_std;
+    x = x_std; y = y_std; z = z_std;
     if (run) {
         std::tie(dx, dy, dz) = foot_traj(phase_AVD_ARG, step_length, step_height, T);
         float z_eq = -30.0f;
@@ -199,13 +203,13 @@ void BotCtrl::autonomous_move(float t, float angle_target, bool run_cmd, bool tu
         x += x_leg_offset_std;
         y += y_leg_offset_std;
     }
-    hip_knee_foot = ik_leg({x, y, z}, M_PI);
-    qTarget [9] = static_cast<float>(hip_knee_foot[0]);
-    qTarget [10] = static_cast<float>(hip_knee_foot[1]);
-    qTarget [11] = static_cast<float>(hip_knee_foot[2]);
+    hip_knee_foot = ik_leg({x, y, z}, 0.0);
+    qTarget[9] =  static_cast<float>((hip_knee_foot[0]* (180.0 / M_PI))+90.0);
+    qTarget[10] = static_cast<float>(90-(hip_knee_foot[1]* (180.0 / M_PI)));
+    qTarget[11] = static_cast<float>(-(hip_knee_foot[2]* (180.0 / M_PI)));    
 
     // AVG
-    x = x_std; y = -y_std; z = z_std;
+    x = x_std; y = y_std; z = z_std;
     if (run) {
         std::tie(dx, dy, dz) = foot_traj(phase_AVG_ARD, step_length, step_height, T);
         float z_eq = 20.0f;
@@ -218,13 +222,13 @@ void BotCtrl::autonomous_move(float t, float angle_target, bool run_cmd, bool tu
         x -= x_leg_offset_std;
         y += y_leg_offset_std;
     }
-    hip_knee_foot = ik_leg({-x, y, z}, M_PI);
-    qTarget [3] = static_cast<float>(hip_knee_foot[0]);
-    qTarget [4] = static_cast<float>(hip_knee_foot[1]);
-    qTarget [5] = static_cast<float>(hip_knee_foot[2]);
+    hip_knee_foot = ik_leg({x, y, z}, 0.0);
+    qTarget[3] =  static_cast<float>(-(hip_knee_foot[0]* (180.0 / M_PI))+90.0);
+    qTarget[4] =  static_cast<float>(90-(hip_knee_foot[1]* (180.0 / M_PI)));
+    qTarget[5] =  static_cast<float>(-(hip_knee_foot[2]* (180.0 / M_PI)));    
 
     // ARD
-    x = -x_std; y = y_std; z = z_std;
+    x = x_std; y = y_std; z = z_std;
     if (run) {
         std::tie(dx, dy, dz) = foot_traj(phase_AVG_ARD, step_length, step_height, T);
         float z_eq = -30.0f;
@@ -237,10 +241,10 @@ void BotCtrl::autonomous_move(float t, float angle_target, bool run_cmd, bool tu
         x += x_leg_offset_std;
         y -= y_leg_offset_std;
     }
-    hip_knee_foot = ik_leg({-x, y, z}, 0.0);
-    qTarget [0] = static_cast<float>(hip_knee_foot[0]);
-    qTarget [1] = static_cast<float>(hip_knee_foot[1]);
-    qTarget [2] = static_cast<float>(hip_knee_foot[2]);
+    hip_knee_foot = ik_leg({x, y, z}, 0.0);
+    qTarget[0] =  static_cast<float>(-(hip_knee_foot[0]* (180.0 / M_PI))+90.0);
+    qTarget[1] =  static_cast<float>(90-(hip_knee_foot[1]* (180.0 / M_PI)));
+    qTarget[2] =  static_cast<float>(-(hip_knee_foot[2]* (180.0 / M_PI)));    
 
     turn_last_cycle = turn;
 }

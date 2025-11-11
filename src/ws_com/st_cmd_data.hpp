@@ -15,6 +15,7 @@ struct CmdData {
     bool xTeleop;
     bool xTeleop_run;
     bool xTeleop_turn;
+    float fTeleop_angle;
     std::array<float, 12> qTarget_manual;
     std::array<bool, 12> qActive_manual;
 
@@ -26,6 +27,7 @@ struct CmdData {
         xTeleop = false;
         xTeleop_run = false;
         xTeleop_turn = false;
+        fTeleop_angle = 0.0f;
         qTarget_manual.fill(0.0f);
         qActive_manual.fill(false);
     }

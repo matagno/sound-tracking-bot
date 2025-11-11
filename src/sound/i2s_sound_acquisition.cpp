@@ -30,7 +30,7 @@ void I2sSoundAcquisition::init_i2s() {
         .bck_io_num = 26,    // Bit Clock
         .ws_io_num = 25,     // Word Select
         .data_out_num = I2S_PIN_NO_CHANGE,
-        .data_in_num = 32    // Data
+        .data_in_num = 17    // Data
     };
 
     i2s_driver_install(I2S_NUM_0, &i2s_config, 0, nullptr);
@@ -55,6 +55,8 @@ void I2sSoundAcquisition::i2s_acquisition() {
             // Filtred angle
             float filtered_left = refBiquad_filterL.process(left);
             float filtered_right = refBiquad_filterR.process(right);
+            //ESP_LOGI("Sound", "Sample Left: %f", left);
+            //ESP_LOGI("Sound", "Sample Right: %f", right);
 
             // Cross-correlation
             if (windowL.size() < WINDOW_SIZE && windowR.size() < WINDOW_SIZE) {
@@ -62,9 +64,11 @@ void I2sSoundAcquisition::i2s_acquisition() {
                 windowR.push_back(filtered_right);
             } else {
                 // Register      
+                ESP_LOGI("Sound", "CC1");
                 if(xSemaphoreTake(refSample_data.mutexAll, portMAX_DELAY) == pdTRUE) {
                     refSample_data.vecSamplesR = windowR;
                     refSample_data.vecSamplesL = windowL;
+                    ESP_LOGI("Sound", "CC2");
 
                     xSemaphoreGive(refSample_data.mutexAll);
                 }

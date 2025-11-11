@@ -69,60 +69,67 @@ void cycle_task(void* arg) {
 
     for(;;) {
         /*      Input Data processing       */
-    
-        //if(xSemaphoreTake(objBot_ctrl.mutexData_transmit, portMAX_DELAY) == pdTRUE) {
-            if (cycle_count % (freq_cycle * 1) == 0){
-                objBot_ctrl.update_move_mode();
-                ESP_LOGI("CMD", "Move Mode Updated");
-            }
-            if (cycle_count % (freq_cycle * 10) == 0){
-                objBot_ctrl.update_sound_angle();
-            }
-            //xSemaphoreGive(objBot_ctrl.mutexData_transmit);
-        //}
+        if (cycle_count % (freq_cycle * 1) == 0){
+            objBot_ctrl.update_move_mode();
+        }
+        if (cycle_count % (freq_cycle * 1) == 0){
+            objBot_ctrl.update_sound_angle();
+        }
+
 
         /*          Move Choice            */
+        float t = esp_timer_get_time() / 1000000.0f;
         if (!objBot_ctrl.xAuto && !objBot_ctrl.xManu && !objBot_ctrl.xTeleop) {
-            objBot_ctrl.qActive.fill(true);
-            objBot_ctrl.qTarget = {
-                                 90.0f, 90.0f, 180.0f, // ARD 
-                                 90.0f, 90.0f, 180.0f, // AVG
-                                 90.0f, 90.0f, 180.0f, // AVD
-                                 90.0f, 90.0f, 180.0f};// ARG
+            //float x = 0, y =  136.840, z = -128.05;
+            float x = 110, y = 110, z = -110;
+            
+            // ARD
+            auto hip_knee_foot_1 = ik_leg({x, y, z}, 0.0);
+            objBot_ctrl.qTarget[0] = static_cast<float>(-(hip_knee_foot_1[0]* (180.0 / M_PI))+90.0);
+            objBot_ctrl.qTarget[1] = static_cast<float>(90-(hip_knee_foot_1[1]* (180.0 / M_PI)));
+            objBot_ctrl.qTarget[2] = static_cast<float>(-(hip_knee_foot_1[2]* (180.0 / M_PI)));
+            //ESP_LOGI("CMD", "Leg 1 at %f, %f, %f", hip_knee_foot_1[0], hip_knee_foot_1[1], hip_knee_foot_1[2]);
+            // AVG
+            auto hip_knee_foot_2 = ik_leg({x, y, z}, 0.0);
+            objBot_ctrl.qTarget[3] = static_cast<float>(-(hip_knee_foot_2[0]* (180.0 / M_PI))+90.0);
+            objBot_ctrl.qTarget[4] = static_cast<float>(90-(hip_knee_foot_2[1]* (180.0 / M_PI)));
+            objBot_ctrl.qTarget[5] = static_cast<float>(-(hip_knee_foot_2[2]* (180.0 / M_PI)));
+            //ESP_LOGI("CMD", "Leg 2 at %f, %f, %f", hip_knee_foot_2[0], hip_knee_foot_2[1], hip_knee_foot_2[2]);
+            // AVD
+            auto hip_knee_foot_3 = ik_leg({x, y, z}, 0.0);
+            objBot_ctrl.qTarget[6] = static_cast<float>((hip_knee_foot_3[0]* (180.0 / M_PI))+90.0);
+            objBot_ctrl.qTarget[7] = static_cast<float>(90-(hip_knee_foot_3[1]* (180.0 / M_PI)));
+            objBot_ctrl.qTarget[8] = static_cast<float>(-(hip_knee_foot_3[2]* (180.0 / M_PI)));
+            //ESP_LOGI("CMD", "Leg 3 at %f, %f, %f", hip_knee_foot_3[0], hip_knee_foot_3[1], hip_knee_foot_3[2]);
+            // ARG
+            auto hip_knee_foot_4 = ik_leg({x, y, z}, 0.0);
+            objBot_ctrl.qTarget[9] = static_cast<float>((hip_knee_foot_4[0]* (180.0 / M_PI))+90.0);
+            objBot_ctrl.qTarget[10] = static_cast<float>(90-(hip_knee_foot_4[1]* (180.0 / M_PI)));
+            objBot_ctrl.qTarget[11] = static_cast<float>(-(hip_knee_foot_4[2]* (180.0 / M_PI)));
+            //ESP_LOGI("CMD", "Leg 4 at %f, %f, %f", hip_knee_foot_4[0], hip_knee_foot_4[1], hip_knee_foot_4[2]);
         }
-        /*
         if (objBot_ctrl.xAuto && !objBot_ctrl.xManu && !objBot_ctrl.xTeleop) {
             if (objBot_ctrl.fAngle != 9999.0f) {
-                float t = esp_timer_get_time() / 1000000.0f;
-
-                // If angle between -20 and 20 degres : go forward
-                // Else function to set qTarget based on fAngle
+                if (objBot_ctrl.fAngle < 20.0f && objBot_ctrl.fAngle > -20.0f && !objBot_ctrl.turn_in_progress) {
+                    objBot_ctrl.autonomous_move(t, 0.0f, true, false);
+                }else{
+                    objBot_ctrl.autonomous_move(t, objBot_ctrl.fAngle * M_PI / 180, false, true);
+                }
             }
         }
         if (objBot_ctrl.xTeleop && !objBot_ctrl.xAuto && !objBot_ctrl.xManu) {
-            if (objBot_ctrl.xTeleop_run || objBot_ctrl.xTeleop_turn) {
-                objBot_ctrl.qActive.fill(true);
+            if (objBot_ctrl.xTeleop_run) {
+                objBot_ctrl.autonomous_move(t, 0.0f, true, false);
             }
-        }*/
-
-        /*
-        // Test Motor
-        if (cycle_count % (3*freq_cycle) == 0) {
-            objBot_ctrl.adrPCA.set_PWM(0, 0, 102); // 0
-        } else {
-            objBot_ctrl.adrPCA.set_PWM(0, 0, 491); // 180
-        }*/
-
-        /*      Output Update       */
-        objBot_ctrl.update_servos();
-
-        if (cycle_count % (freq_cycle * 1) == 0){
-            ESP_LOGI("CMD", "Moteur 0 = %f", objBot_ctrl.qTarget[0]);
-            if (objBot_ctrl.qActive[0]){
-                ESP_LOGI("CMD", "Moteur 0 Active");
+            else if (objBot_ctrl.xTeleop_turn || objBot_ctrl.turn_in_progress) {
+                objBot_ctrl.autonomous_move(t, objBot_ctrl.fTeleop_angle * M_PI / 180, false, true);
+                ESP_LOGI("Cmd", "Turn in progress");
             }
         }
 
+        /*      Output Update       */
+        objBot_ctrl.update_servos();
+        
         // Reset count every minute
         cycle_count = (cycle_count + 1) % (freq_cycle * 60 + 1);
         vTaskDelay(pdMS_TO_TICKS(1000 / freq_cycle));
@@ -171,7 +178,7 @@ extern "C" void app_main(void) {
     objBot_ctrl.init_value();
 
     // Task
-    // xTaskCreate(sound_task, "I2S_Task", 4096, NULL, 5, NULL);
+    xTaskCreate(sound_task, "I2S_Task", 4096, NULL, 5, NULL);
     xTaskCreate(cycle_task, "Cycle_Task", 4096, NULL, 4, NULL);
 
     vTaskDelete(NULL);
@@ -185,21 +192,5 @@ extern "C" void app_main(void) {
 /*      Note        */
 /*
 Client websocket :
-With wscat : wscat -c ws://192.168.4.1:80/ws
-ping > pong
-angle > angle value
+Test with wscat : wscat -c ws://192.168.4.1:80/ws
 */
-/*
-Angle calculation :
-Resultat entre -90 et 90 degres
-9999 = pas de son detecte
-*/
-/*
-Regle mouvement robot :
-Si angle entre -20 et 20 degres : avancer tout droit
-Si angle entre 20 et 90 degres : tourner a droite de angle degres puis reverifier angle
-Si angle entre -20 et -90 degres : tourner a gauche de angle degres puis reverifier angle
-Pas de probleme de direction car on reverifie l'angle apres chaque rotation
-9999 = pas de son detecte
-*/
-
