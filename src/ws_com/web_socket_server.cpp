@@ -139,8 +139,9 @@ void WebSocketServer::on_message_received(const char* msg, httpd_req_t* req) {
         int index = -1;
         if (sscanf(msg + 12, "%f-%d", &value, &index) == 2) {
             if (index >= 0 && index < 12) {
-                if (xSemaphoreTake(adrCmd_Data.mutexAll, pdMS_TO_TICKS(10)) == pdTRUE) {
+                if (xSemaphoreTake(adrCmd_Data.mutexAll, portMAX_DELAY) == pdTRUE) {
                     adrCmd_Data.qTarget_manual[index] = value;
+                    ESP_LOGI("WS_Server", "Cmd received: set_qTarget %f at index %d", value, index);
                     xSemaphoreGive(adrCmd_Data.mutexAll);
                 }
             }
@@ -156,8 +157,9 @@ void WebSocketServer::on_message_received(const char* msg, httpd_req_t* req) {
 
             bool value = (strcmp(state, "true") == 0);
             if (index >= 0 && index < 12) {
-                if (xSemaphoreTake(adrCmd_Data.mutexAll, pdMS_TO_TICKS(10)) == pdTRUE) {
+                if (xSemaphoreTake(adrCmd_Data.mutexAll, portMAX_DELAY) == pdTRUE) {
                     adrCmd_Data.qActive_manual[index] = value;
+                    ESP_LOGI("WS_Server", "Cmd received: index %d", index);
                     xSemaphoreGive(adrCmd_Data.mutexAll);
                 }
             }
@@ -172,6 +174,7 @@ void WebSocketServer::setBoolCommand(const char* msg, const char* prefix, bool& 
         const char* val = msg + len;
         if (strcmp(val, "true") == 0) target = true;
         else if (strcmp(val, "false") == 0) target = false;
+        ESP_LOGI("WS_Server", "Cmd received: %s = %s", prefix, target ? "true" : "false");
     }
 }
 

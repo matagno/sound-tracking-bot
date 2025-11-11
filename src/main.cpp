@@ -9,6 +9,7 @@
 #include "esp_chip_info.h"
 #include "esp_flash.h"
 #include "esp_system.h"
+#include "esp_timer.h"
 
 
 #include "bot/utils/pca9685.hpp"
@@ -68,19 +69,32 @@ void cycle_task(void* arg) {
 
     for(;;) {
         /*      Input Data processing       */
-        if(xSemaphoreTake(objBot_ctrl.mutexData_transmit, portMAX_DELAY) == pdTRUE) {
-            if (cycle_count == freq_cycle * 1){
+    
+        //if(xSemaphoreTake(objBot_ctrl.mutexData_transmit, portMAX_DELAY) == pdTRUE) {
+            if (cycle_count % (freq_cycle * 1) == 0){
                 objBot_ctrl.update_move_mode();
+                ESP_LOGI("CMD", "Move Mode Updated");
             }
-            if (cycle_count == freq_cycle * 5){
+            if (cycle_count % (freq_cycle * 10) == 0){
                 objBot_ctrl.update_sound_angle();
             }
-            xSemaphoreGive(objBot_ctrl.mutexData_transmit);
-        }
+            //xSemaphoreGive(objBot_ctrl.mutexData_transmit);
+        //}
 
         /*          Move Choice            */
+        if (!objBot_ctrl.xAuto && !objBot_ctrl.xManu && !objBot_ctrl.xTeleop) {
+            objBot_ctrl.qActive.fill(true);
+            objBot_ctrl.qTarget = {
+                                 90.0f, 90.0f, 180.0f, // ARD 
+                                 90.0f, 90.0f, 180.0f, // AVG
+                                 90.0f, 90.0f, 180.0f, // AVD
+                                 90.0f, 90.0f, 180.0f};// ARG
+        }
+        /*
         if (objBot_ctrl.xAuto && !objBot_ctrl.xManu && !objBot_ctrl.xTeleop) {
             if (objBot_ctrl.fAngle != 9999.0f) {
+                float t = esp_timer_get_time() / 1000000.0f;
+
                 // If angle between -20 and 20 degres : go forward
                 // Else function to set qTarget based on fAngle
             }
@@ -89,10 +103,25 @@ void cycle_task(void* arg) {
             if (objBot_ctrl.xTeleop_run || objBot_ctrl.xTeleop_turn) {
                 objBot_ctrl.qActive.fill(true);
             }
-        }
+        }*/
+
+        /*
+        // Test Motor
+        if (cycle_count % (3*freq_cycle) == 0) {
+            objBot_ctrl.adrPCA.set_PWM(0, 0, 102); // 0
+        } else {
+            objBot_ctrl.adrPCA.set_PWM(0, 0, 491); // 180
+        }*/
 
         /*      Output Update       */
         objBot_ctrl.update_servos();
+
+        if (cycle_count % (freq_cycle * 1) == 0){
+            ESP_LOGI("CMD", "Moteur 0 = %f", objBot_ctrl.qTarget[0]);
+            if (objBot_ctrl.qActive[0]){
+                ESP_LOGI("CMD", "Moteur 0 Active");
+            }
+        }
 
         // Reset count every minute
         cycle_count = (cycle_count + 1) % (freq_cycle * 60 + 1);
@@ -112,6 +141,8 @@ void cycle_task(void* arg) {
 
 extern "C" void app_main(void) {
 
+    vTaskDelay(pdMS_TO_TICKS(10000));
+
     /////////////////////////   INFO CHIP   /////////////////////////
     esp_chip_info_t chip_info;
     uint32_t flash_size;
@@ -127,18 +158,20 @@ extern "C" void app_main(void) {
     // Init Comunication
     objWS_server.init_wifi_softap("ESP_Spider", "12345678");
     objWS_server.init_ws(80);
+    stCmd_data.init_value();
     
     // Init Sound
-    objBiquad_filterL.setup_bandpass(500.0f, 1000.0f, 44100.0f);
+    //objBiquad_filterL.setup_bandpass(500.0f, 1000.0f, 44100.0f);
     objBiquad_filterR.setup_bandpass(500.0f, 1000.0f, 44100.0f);
     objI2s_sound_scquisition.init_i2s();
+    stSample_data.init_value();
 
     // Init Bot ctrl
     objPca.init_pca();
     objBot_ctrl.init_value();
 
     // Task
-    xTaskCreate(sound_task, "I2S_Task", 4096, NULL, 5, NULL);
+    // xTaskCreate(sound_task, "I2S_Task", 4096, NULL, 5, NULL);
     xTaskCreate(cycle_task, "Cycle_Task", 4096, NULL, 4, NULL);
 
     vTaskDelete(NULL);

@@ -30,7 +30,7 @@ void I2sSoundAcquisition::init_i2s() {
         .bck_io_num = 26,    // Bit Clock
         .ws_io_num = 25,     // Word Select
         .data_out_num = I2S_PIN_NO_CHANGE,
-        .data_in_num = 22    // Data
+        .data_in_num = 32    // Data
     };
 
     i2s_driver_install(I2S_NUM_0, &i2s_config, 0, nullptr);
