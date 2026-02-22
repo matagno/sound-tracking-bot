@@ -1,73 +1,76 @@
-# Sound-Tracking Bot - README
+# Sound-Tracking Bot
+
+[![en](https://img.shields.io/badge/lang-en-red.svg)](https://github.com/matagno/sound-tracking-bot/blob/master/README.md)
+[![fr](https://img.shields.io/badge/lang-fr-blue.svg)](https://github.com/matagno/sound-tracking-bot/blob/master/README.fr.md)
 
 ## 📋 Description
 
-**Sound-Tracking Bot** est un robot quadripode autonome contrôlé par **détection acoustique** et capable de :
-- 🎵 Localiser une source sonore via corrélation croisée stéréo
-- 🤖 Se mouvoir de manière autonome ou téléopérée
-- 🌐 Communiquer via WebSocket pour le contrôle à distance
-- 🎚️ Filtrer et traiter les signaux audio en temps réel
+**Sound-Tracking Bot** is an autonomous quadruped robot controlled by **acoustic detection** and capable of:
+- 🎵 Localizing a sound source via stereo cross-correlation
+- 🤖 Moving autonomously or via teleoperation
+- 🌐 Communicating via WebSocket for remote control
+- 🎚️ Filtering and processing audio signals in real-time
 
-Le système fonctionne sur un **ESP32** avec acquisition audio I2S stéréo et contrôle de 12 servomoteurs via PCA9685.
+The system runs on an **ESP32** with stereo I2S audio acquisition and control of 12 servo motors via PCA9685.
 
 ---
 
 ## 🏗️ Architecture
 
-### Structure du projet
+### Project Structure
 ```
 src/
-├── main.cpp                    # Point d'entrée, tâches FreeRTOS
-├── bot/                        # Contrôle du robot
-│   ├── bot_ctrl.cpp/hpp        # Cinématique inverse, locomotion
+├── main.cpp                    # Entry point, FreeRTOS tasks
+├── bot/                        # Robot control
+│   ├── bot_ctrl.cpp/hpp        # Inverse kinematics, locomotion
 │   └── utils/
-│       ├── ik_calcul.cpp/hpp   # Calcul IK pour les pattes
-│       └── pca9685.cpp/hpp     # Driver PWM pour servos
-├── sound/                      # Traitement audio
-│   ├── i2s_sound_acquisition.cpp/hpp  # Acquisition I2S stéréo
-│   ├── st_sample_data.hpp      # Structure de données audio
+│       ├── ik_calcul.cpp/hpp   # IK calculation for legs
+│       └── pca9685.cpp/hpp     # PWM driver for servos
+├── sound/                      # Audio processing
+│   ├── i2s_sound_acquisition.cpp/hpp  # Stereo I2S acquisition
+│   ├── st_sample_data.hpp      # Audio data structure
 │   └── utils/
-│       └── biquad_filter.cpp/hpp      # Filtre passe-bande
-└── ws_com/                     # Communication WebSocket
-    ├── web_socket_server.cpp/hpp      # Serveur WebSocket
-    └── st_cmd_data.hpp         # Commandes reçues
+│       └── biquad_filter.cpp/hpp      # Bandpass filter
+└── ws_com/                     # WebSocket communication
+    ├── web_socket_server.cpp/hpp      # WebSocket server
+    └── st_cmd_data.hpp         # Received commands
 ```
 
 ---
 
-## 🎯 Fonctionnalités principales
+## 🎯 Key Features
 
-### 1️⃣ Détection acoustique
+### 1️⃣ Acoustic Detection
 ```cpp
-// Localisation par corrélation croisée des signaux L/R
-// Calcule l'angle de la source sonore en degrés
+// Sound source localization via L/R signal cross-correlation
+// Returns the angle of the sound source in degrees
 int calculate_angle(const std::vector<float>& sigL, const std::vector<float>& sigR)
 ```
-- **Fréquence d'échantillonnage** : 44.1 kHz
-- **Bande de fréquence** : 1-1.2 kHz (filtrage passe-bande)
-- **Distance inter-micros** : 10 cm
-- **Résolution** : Fenêtres de 441 échantillons
+- **Sampling frequency**: 44.1 kHz
+- **Frequency band**: 1-1.2 kHz (bandpass filtering)
+- **Microphone distance**: 10 cm
+- **Resolution**: Windows of 441 samples
 
-### 2️⃣ Cinématique inverse
+### 2️⃣ Inverse Kinematics
 ```cpp
 std::array<double,3> ik_leg(const std::array<double,3>& target, ...)
-// Retourne [hip_angle, knee_angle, foot_angle]
+// Returns [hip_angle, knee_angle, foot_angle]
 ```
-- Calcul IK pour **4 pattes** (2 avant, 2 arrière)
-- Longueurs : coxa=60mm, tibia=76.84mm, tarse=128.05mm
+- IK calculation for **4 legs** (2 front, 2 rear)
+- Lengths: coxa=60mm, tibia=76.84mm, tarsus=128.05mm
 
 ### 3️⃣ Locomotion
-- **Mode autonome** : Suivi du son avec gait tripod
-- **Mode téléopéré** : Contrôle via WebSocket
-- **Gait parameters** : Longueur de pas=130mm, hauteur=70mm, période=2s
+- **Autonomous mode**: Sound tracking with tripod gait
+- **Teleoperated mode**: WebSocket control
+- **Gait parameters**: Step length=130mm, height=70mm, period=2s
 
-### 4️⃣ Contrôle WebSocket
+### 4️⃣ WebSocket Control
 ```
 ws://192.168.4.1/ws
 
-Commandes :
+Commands:
 - "ping" → "pong"
-- "get_angle" → angle en degrés
+- "get_angle" → angle in degrees
 - "set_auto-true/false"
 - "set_manual-true/false"
 - "set_teleop-true/false"
@@ -77,42 +80,45 @@ Commandes :
 
 ---
 
-## 🔧 Configuration matérielle
+## 🔧 Hardware Configuration
 
 ### ESP32 D1 Mini
-| Composant | GPIO | Notes |
+| Component | GPIO | Notes |
 |-----------|------|-------|
-| **I2S Audio** | | Acquisition stéréo |
+| **I2S Audio** | | Stereo acquisition |
 | BCK (Bit Clock) | 26 | |
 | WS (Word Select) | 25 | |
-| DATA_IN | 17 | Données L/R 32-bit |
+| DATA_IN | 17 | L/R 32-bit data |
 | **PCA9685** | I2C | PWM servo driver @ 50 Hz |
 | SDA | 21 | |
 | SCL | 22 | |
 | **WiFi** | SoftAP | SSID: `ESP_Spider` |
 
-### Servomoteurs
-- **Nombre** : 12 (3 par patte × 4 pattes)
-- **Plage** : 0°-180°
-- **Fréquence** : 50 Hz
+### Servo Motors
+- **Count**: 12 (3 per leg × 4 legs)
+- **Range**: 0°-180°
+- **Frequency**: 50 Hz
+
+### Electrical Schematic
+![Electrical Schematic](schematic_spider.png)
 
 ---
 
-## 🚀 Démarrage rapide
+## 🚀 Quick Start
 
 ### 1. Configuration
 ```bash
-# Copier la configuration
+# Copy configuration
 cp sdkconfig.esp32_d1_mini sdkconfig
 ```
 
-### 2. Build et upload
+### 2. Build and Upload
 ```bash
 idf.py build
 idf.py flash monitor
 ```
 
-### 3. Connexion WebSocket
+### 3. WebSocket Connection
 ```bash
 # Via wscat
 wscat -c ws://192.168.4.1/ws
@@ -120,54 +126,54 @@ wscat -c ws://192.168.4.1/ws
 
 ---
 
-## 📊 Traitement du signal audio
+## 📊 Audio Signal Processing
 
-### Pipeline audio
+### Audio Pipeline
 ```
 I2S Input (44.1 kHz) 
     ↓
 Biquad Filter (1-1.2 kHz)
     ↓
-Fenêtre glissante (441 échantillons)
+Sliding window (441 samples)
     ↓
-Corrélation croisée L-R
+L-R cross-correlation
     ↓
-Calcul angle (arcsin + conversion degrés)
+Angle calculation (arcsin + degree conversion)
 ```
 
-### Filtre passe-bande
+### Bandpass Filter
 ```cpp
 void setup_bandpass(float f1, float f2, float fs)
-// Fréquence centrale : sqrt(f1*f2)
-// Facteur Q : sqrt(f2/f1)
+// Center frequency: sqrt(f1*f2)
+// Quality factor: sqrt(f2/f1)
 ```
 
 ---
 
-## 🤝 Modes de fonctionnement
+## 🤝 Operating Modes
 
-### Mode Autonome
-- Écoute active du bruit
-- Si angle valide : tourne vers la source
-- Si angle < 20° : avance
-- Sinon : continue à tourner
+### Autonomous Mode
+- Active sound listening
+- If valid angle: turns toward sound source
+- If angle < 20°: moves forward
+- Otherwise: continues turning
 
-### Mode Manuel
-- Contrôle directe des angles cibles
-- Activation/désactivation des servos individuels
+### Manual Mode
+- Direct control of target angles
+- Individual servo enable/disable
 
-### Mode Téléopéré
-- Commandes de **run** (avancer) et **turn** (tourner)
-- Angle de virage paramétrable
+### Teleoperated Mode
+- **run** (move forward) and **turn** commands
+- Customizable turning angle
 
 ---
 
-## 📈 Tâches FreeRTOS
+## 📈 FreeRTOS Tasks
 
-| Tâche | Priorité | Période | Fonction |
-|-------|----------|---------|----------|
-| `sound_task` | 5 | Continu | Acquisition audio I2S |
-| `cycle_task` | 4 | 100 ms | Contrôle moteurs, traitement |
+| Task | Priority | Period | Function |
+|------|----------|--------|----------|
+| `sound_task` | 5 | Continuous | I2S audio acquisition |
+| `cycle_task` | 4 | 100 ms | Motor control, processing |
 
 ---
 
